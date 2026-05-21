@@ -76,12 +76,12 @@ jobs:
           key: ${{ secrets.AZURE_SSH_KEY }}
           command_timeout: 30m
           script: |
-            # Pull latest images (use quiet to reduce output)
+            # Pull latest images
             docker pull --quiet priyankamanickam/complaint-backend:latest
             docker pull --quiet priyankamanickam/complaint-frontend:latest
             docker pull mongo:6
 
-            # Stop and remove old containers (ignore errors if they don't exist)
+            # Stop and remove old containers (ignore errors)
             docker stop complaint-backend complaint-frontend complaint-mongo 2>/dev/null || true
             docker rm complaint-backend complaint-frontend complaint-mongo 2>/dev/null || true
 
@@ -108,7 +108,7 @@ jobs:
               -p 80:80 \
               priyankamanickam/complaint-frontend:latest
 
-            # Wait a few seconds for frontend to be ready
+            # Wait a moment for frontend to be ready
             sleep 5
 
             # Fix API_URL using the VM's public IP (from GitHub secret)
