@@ -63,7 +63,7 @@ jobs:
           push: true
           tags: ${{ env.FRONTEND_IMAGE }}:latest
 
-  deploy:
+    deploy:
     needs: test-and-build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && success()
@@ -76,7 +76,7 @@ jobs:
           key: ${{ secrets.AZURE_SSH_KEY }}
           command_timeout: 30m
           script: |
-            # Force remove any existing containers (even if restarting)
+            # Force remove any existing containers with the same names
             docker rm -f complaint-backend complaint-frontend complaint-mongo 2>/dev/null || true
 
             # Pull latest images
@@ -102,12 +102,13 @@ jobs:
               -e JWT_SECRET=your_super_secret_key_change_me_in_production \
               priyankamanickam/complaint-backend:latest
 
-            # Start frontend
+            # Start frontend with link to backend
             docker run -d --name complaint-frontend --restart unless-stopped \
+              --link complaint-backend:backend \
               -p 80:80 \
               priyankamanickam/complaint-frontend:latest
 
-            # Wait a moment for frontend to be ready
+            # Wait a few seconds for frontend to be ready
             sleep 5
 
             # Fix API_URL using the VM's public IP (from GitHub secret)
