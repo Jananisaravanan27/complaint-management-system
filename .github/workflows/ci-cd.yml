@@ -74,13 +74,14 @@ jobs:
           host: ${{ secrets.AZURE_VM_IP }}
           username: ${{ secrets.AZURE_VM_USER }}
           key: ${{ secrets.AZURE_SSH_KEY }}
+          command_timeout: 10m
           script: |
             # Pull latest images
             docker pull priyankamanickam/complaint-backend:latest
             docker pull priyankamanickam/complaint-frontend:latest
             docker pull mongo:6
 
-            # Stop and remove old containers (ignore errors if they don't exist)
+            # Stop and remove old containers (ignore errors)
             docker stop complaint-backend complaint-frontend complaint-mongo || true
             docker rm complaint-backend complaint-frontend complaint-mongo || true
 
@@ -107,9 +108,9 @@ jobs:
               -p 80:80 \
               priyankamanickam/complaint-frontend:latest
 
-            # Wait for frontend to start
+            # Wait a moment for frontend to be ready
             sleep 5
 
-            # Automatically fix the API_URL inside the frontend container (use the VM's public IP)
-            VM_IP=$(curl -s ifconfig.me)
+            # Fix API_URL using the VM's IP (from the secret)
+            VM_IP="${{ secrets.AZURE_VM_IP }}"
             docker exec complaint-frontend /bin/sh -c "sed -i 's|http://localhost:5001/api|http://'$VM_IP':5001/api|g' /usr/share/nginx/html/*.html"
