@@ -76,14 +76,13 @@ jobs:
           key: ${{ secrets.AZURE_SSH_KEY }}
           command_timeout: 30m
           script: |
-            # Pull latest images
-            docker pull --quiet priyankamanickam/complaint-backend:latest
-            docker pull --quiet priyankamanickam/complaint-frontend:latest
-            docker pull mongo:6
+            # Force remove any existing containers (even if restarting)
+            docker rm -f complaint-backend complaint-frontend complaint-mongo 2>/dev/null || true
 
-            # Stop and remove old containers (ignore errors)
-            docker stop complaint-backend complaint-frontend complaint-mongo 2>/dev/null || true
-            docker rm complaint-backend complaint-frontend complaint-mongo 2>/dev/null || true
+            # Pull latest images
+            docker pull priyankamanickam/complaint-backend:latest
+            docker pull priyankamanickam/complaint-frontend:latest
+            docker pull mongo:6
 
             # Start MongoDB
             docker run -d --name complaint-mongo --restart unless-stopped \
