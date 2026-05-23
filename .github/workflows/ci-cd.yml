@@ -79,23 +79,31 @@ jobs:
             # Create network (ignore if already exists)
             docker network create complaint-net 2>/dev/null || true
 
-            # Remove old containers
-            docker rm -f complaint-backend complaint-frontend complaint-mongo 2>/dev/null || true
+            # Remove ONLY backend and frontend (KEEP MongoDB to preserve data)
+            docker rm -f complaint-backend complaint-frontend 2>/dev/null || true
 
             # Pull latest images
             docker pull jananisaravanan9751/complaint-backend:latest
             docker pull jananisaravanan9751/complaint-frontend:latest
             docker pull mongo:6
 
-            # Start MongoDB
-            docker run -d --name complaint-mongo --restart unless-stopped \
-              --network complaint-net \
-              -p 27017:27017 \
-              -e MONGO_INITDB_ROOT_USERNAME=admin \
-              -e MONGO_INITDB_ROOT_PASSWORD=password123 \
-              -e MONGO_INITDB_DATABASE=complaintDB \
-              -v mongo_data:/data/db \
-              mongo:6
+            # Check if MongoDB is already running, if not start it
+            if [ ! "$(docker ps -q -f name=complaint-mongo)" ]; then
+              if [ "$(docker ps -aq -f status=exited -f name=complaint-mongo)" ]; then
+                # Start existing stopped container
+                docker start complaint-mongo
+              else
+                # Create new MongoDB container
+                docker run -d --name complaint-mongo --restart unless-stopped \
+                  --network complaint-net \
+                  -p 27017:27017 \
+                  -e MONGO_INITDB_ROOT_USERNAME=admin \
+                  -e MONGO_INITDB_ROOT_PASSWORD=password123 \
+                  -e MONGO_INITDB_DATABASE=complaintDB \
+                  -v mongo_data:/data/db \
+                  mongo:6
+              fi
+            fi
 
             # Start backend
             docker run -d --name complaint-backend --restart unless-stopped \
