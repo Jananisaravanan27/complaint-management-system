@@ -62,3 +62,54 @@ jobs:
           context: ./frontend
           push: true
           tags: ${{ env.FRONTEND_IMAGE }}:latest
+
+  deploy:
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && success()
+    steps:
+      - name: Deploy to Azure VM
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.AZURE_VM_IP }}
+          username: ${{ secrets.AZURE_VM_USER }}
+          key: ${{ secrets.AZURE_SSH_KEY }}
+          command_timeout: 30m
+          script: |
+            # Create network (ignore if already exists)
+            docker network create complaint-net 2>/dev/null || true
+
+            # Remove old containers
+            docker rm -f complaint-backend complaint-frontend complaint-mongo 2>/dev/null || true
+
+            # Pull latest images
+            docker pull jananisaravanan9751/complaint-backend:latest
+            docker pull jananisaravanan9751/complaint-frontend:latest
+            docker pull mongo:6
+
+            # Start MongoDB
+            docker run -d --name complaint-mongo --restart unless-stopped \
+              --network complaint-net \
+              -p 27017:27017 \
+              -e MONGO_INITDB_ROOT_USERNAME=admin \
+              -e MONGO_INITDB_ROOT_PASSWORD=password123 \
+              -e MONGO_INITDB_DATABASE=complaintDB \
+              -v mongo_data:/data/db \
+              mongo:6
+
+            # Start backend
+            docker run -d --name complaint-backend --restart unless-stopped \
+              --network complaint-net \
+              -p 5001:5000 \
+              -e PORT=5000 \
+              -e MONGO_URI="mongodb://admin:password123@complaint-mongo:27017/complaintDB?authSource=admin" \
+              -e JWT_SECRET="your_super_secret_key_change_me_in_production" \
+              jananisaravanan9751/complaint-backend:latest
+
+            # Start frontend
+            docker run -d --name complaint-frontend --restart unless-stopped \
+              --network complaint-net \
+              -p 8080:80 \
+              jananisaravanan9751/complaint-frontend:latest
+
+            sleep 5
