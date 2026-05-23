@@ -68,6 +68,9 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && success()
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Deploy to Azure VM
         uses: appleboy/ssh-action@v1
         with:
@@ -80,20 +83,44 @@ jobs:
             docker network create complaint-net 2>/dev/null || true
 
             # Remove ONLY backend and frontend (KEEP MongoDB to preserve data)
-            docker rm -f complaint-backend complaint-frontend 2>/dev/null || true
+            docker rm -f complaint-backend complaint-frontend complaint-prometheus complaint-grafana complaint-node-exporter 2>/dev/null || true
 
             # Pull latest images
             docker pull jananisaravanan9751/complaint-backend:latest
             docker pull jananisaravanan9751/complaint-frontend:latest
             docker pull mongo:6
+            docker pull prom/prometheus:latest
+            docker pull grafana/grafana:latest
+            docker pull prom/node-exporter:latest
+
+            # Create monitoring directory with prometheus.yml
+            mkdir -p /opt/monitoring
+            
+            cat > /opt/monitoring/prometheus.yml << 'EOF'
+            global:
+              scrape_interval: 15s
+              evaluation_interval: 15s
+
+            scrape_configs:
+              - job_name: 'prometheus'
+                static_configs:
+                  - targets: ['localhost:9090']
+
+              - job_name: 'node-exporter'
+                static_configs:
+                  - targets: ['complaint-node-exporter:9100']
+
+              - job_name: 'backend'
+                metrics_path: '/metrics'
+                static_configs:
+                  - targets: ['complaint-backend:5000']
+            EOF
 
             # Check if MongoDB is already running, if not start it
             if [ ! "$(docker ps -q -f name=complaint-mongo)" ]; then
               if [ "$(docker ps -aq -f status=exited -f name=complaint-mongo)" ]; then
-                # Start existing stopped container
                 docker start complaint-mongo
               else
-                # Create new MongoDB container
                 docker run -d --name complaint-mongo --restart unless-stopped \
                   --network complaint-net \
                   -p 27017:27017 \
@@ -119,5 +146,44 @@ jobs:
               --network complaint-net \
               -p 8080:80 \
               jananisaravanan9751/complaint-frontend:latest
+
+            # Start Prometheus with config file
+            docker run -d --name complaint-prometheus --restart unless-stopped \
+              --network complaint-net \
+              -p 9090:9090 \
+              -v /opt/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml \
+              -v prometheus_data:/prometheus \
+              prom/prometheus:latest
+
+            # Start Grafana
+            docker run -d --name complaint-grafana --restart unless-stopped \
+              --network complaint-net \
+              -p 3000:3000 \
+              -e GF_SECURITY_ADMIN_PASSWORD=admin \
+              -e GF_SECURITY_ADMIN_USER=admin \
+              -v grafana_data:/var/lib/grafana \
+              grafana/grafana:latest
+
+            # Start Node Exporter
+            docker run -d --name complaint-node-exporter --restart unless-stopped \
+              --network complaint-net \
+              -p 9100:9100 \
+              -v /proc:/host/proc:ro \
+              -v /sys:/host/sys:ro \
+              -v /:/rootfs:ro \
+              prom/node-exporter:latest \
+              --path.procfs=/host/proc \
+              --path.sysfs=/host/sys \
+              --path.rootfs=/rootfs
+
+            echo "========================================="
+            echo "Deployment completed successfully!"
+            echo "========================================="
+            echo "Frontend: http://${{ secrets.AZURE_VM_IP }}:8080"
+            echo "Backend API: http://${{ secrets.AZURE_VM_IP }}:5001"
+            echo "Prometheus: http://${{ secrets.AZURE_VM_IP }}:9090"
+            echo "Grafana: http://${{ secrets.AZURE_VM_IP }}:3000 (admin/admin)"
+            echo "Node Exporter: http://${{ secrets.AZURE_VM_IP }}:9100"
+            echo "========================================="
 
             sleep 5
