@@ -5,20 +5,9 @@ const cors = require('cors');
 const authRoutes = require('./routes/auth');
 const complaintRoutes = require('./routes/complaints');
 
-// Prometheus metrics
-const promClient = require('prom-client');
-const collectDefaultMetrics = promClient.collectDefaultMetrics;
-collectDefaultMetrics();
-
 const app = express();
 app.use(cors());
 app.use(express.json());
-
-// Metrics endpoint for Prometheus
-app.get('/metrics', async (req, res) => {
-  res.set('Content-Type', promClient.register.contentType);
-  res.end(await promClient.register.metrics());
-});
 
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('MongoDB connected'))
