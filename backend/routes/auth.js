@@ -29,7 +29,7 @@ router.post('/login', async (req, res) => {
     if (!user) return res.status(400).json({ msg: 'Invalid credentials' });
     const isMatch = await user.comparePassword(password);
     if (!isMatch) return res.status(400).json({ msg: 'Invalid credentials' });
-    console.log('Login successful - User role from DB:', user.role);
+    console.log('Login successful updated - User role from DB:', user.role);
     const payload = { userId: user.id };
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
     console.log('Sending login response - Role:', user.role);
